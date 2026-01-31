@@ -1,1 +1,1 @@
-# gg_sync_repo
+# gitee sync with github
