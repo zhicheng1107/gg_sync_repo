@@ -19,11 +19,15 @@
       >
         <!-- 示例内容 -->
         <div class="grid-background"></div>
-        <div class="content-item">示例内容</div>
-        <div class="content-item" style="top: 200px; left: 300px;">可移动内容</div>
-        <div class="content-item" style="top: 400px; left: 150px; background: #8bc34a;">更多元素</div>
-        <div class="content-item" style="top: 100px; left: 500px; background: #ff9800;">元素4</div>
-        <div class="content-item" style="top: 500px; left: 400px; background: #9c27b0;">元素5</div>
+        <div 
+          v-for="(item, index) in contentItems" 
+          :key="index"
+          class="content-item"
+          :style="{ top: item.top + 'px', left: item.left + 'px', background: item.background || '#2196f3' }"
+          @mousedown="startDrag($event, index)"
+        >
+          {{ item.text }}
+        </div>
       </div>
     </div>
   </div>
@@ -34,21 +38,31 @@ export default {
   name: 'InteractiveCanvas',
   data() {
     return {
-      currentZoom: 1, // 当前缩放比例
-      minZoom: 0.1,   // 最小缩放比例
-      maxZoom: 5,     // 最大缩放比例
-      zoomStep: 0.1,  // 缩放步长
+      currentZoom: 1,
+      minZoom: 0.1,
+      maxZoom: 5,
+      zoomStep: 0.1,
       panStartX: 0,
       panStartY: 0,
       isPanning: false,
-      offsetX: 0,     // 平移偏移量
+      offsetX: 0,
       offsetY: 0,
       startX: 0,
       startY: 0,
       containerWidth: window.innerWidth,
       containerHeight: window.innerHeight,
-      contentWidth: 0,  // 画布实际宽度
-      contentHeight: 0  // 画布实际高度
+      contentWidth: 0,
+      contentHeight: 0,
+      draggingIndex: null, // 当前正在拖拽的组件索引
+      dragStartX: 0,       // 拖拽起始点X坐标
+      dragStartY: 0,       // 拖拽起始点Y坐标
+      contentItems: [
+        { text: '示例内容', top: 0, left: 0 },
+        { text: '可移动内容', top: 200, left: 300 },
+        { text: '更多元素', top: 400, left: 150, background: '#8bc34a' },
+        { text: '元素4', top: 100, left: 500, background: '#ff9800' },
+        { text: '元素5', top: 500, left: 400, background: '#9c27b0' }
+      ]
     };
   },
   computed: {
@@ -62,23 +76,23 @@ export default {
     }
   },
   mounted() {
-    this.updateContentSize(); // 初始化画布尺寸
+    this.updateContentSize();
     this.autoCenter();
     window.addEventListener('resize', this.handleResize);
-    document.addEventListener('mousemove', this.pan);
-    document.addEventListener('mouseup', this.endPan);
+    document.addEventListener('mousemove', this.onMouseMove);
+    document.addEventListener('mouseup', this.onMouseUp);
     document.addEventListener('selectstart', this.preventDefault);
   },
   beforeDestroy() {
     window.removeEventListener('resize', this.handleResize);
-    document.removeEventListener('mousemove', this.pan);
-    document.removeEventListener('mouseup', this.endPan);
+    document.removeEventListener('mousemove', this.onMouseMove);
+    document.removeEventListener('mouseup', this.onMouseUp);
     document.removeEventListener('selectstart', this.preventDefault);
   },
   methods: {
     // 阻止默认事件
     preventDefault(e) {
-      if (this.isPanning) {
+      if (this.isPanning || this.draggingIndex !== null) {
         e.preventDefault();
         return false;
       }
@@ -179,10 +193,47 @@ export default {
     handleResize() {
       this.containerWidth = window.innerWidth;
       this.containerHeight = window.innerHeight;
-      this.updateContentSize(); // 更新画布尺寸
+      this.updateContentSize();
       this.$nextTick(() => {
         this.autoCenter();
       });
+    },
+
+    // 开始拖拽某个组件
+    startDrag(event, index) {
+      event.stopPropagation(); // 防止触发画布的拖拽
+      this.draggingIndex = index;
+      this.dragStartX = event.clientX;
+      this.dragStartY = event.clientY;
+    },
+
+    // 拖拽过程中更新组件位置
+    onMouseMove(event) {
+      if (this.draggingIndex === null) return;
+
+      const deltaX = event.clientX - this.dragStartX;
+      const deltaY = event.clientY - this.dragStartY;
+
+      const item = this.contentItems[this.draggingIndex];
+      const newLeft = item.left + deltaX / this.currentZoom;
+      const newTop = item.top + deltaY / this.currentZoom;
+
+      // 限制拖拽范围（防止超出画布）
+      const canvasRect = this.$refs.canvasContent.getBoundingClientRect();
+      const itemWidth = 120; // 假设组件宽度为120px
+      const itemHeight = 60; // 假设组件高度为60px
+
+      item.left = Math.max(0, Math.min(newLeft, canvasRect.width / this.currentZoom - itemWidth));
+      item.top = Math.max(0, Math.min(newTop, canvasRect.height / this.currentZoom - itemHeight));
+
+      // 更新起始点
+      this.dragStartX = event.clientX;
+      this.dragStartY = event.clientY;
+    },
+
+    // 结束拖拽
+    onMouseUp() {
+      this.draggingIndex = null;
     }
   }
 };
@@ -228,7 +279,7 @@ body {
   width: 100%;
   height: 100%;
   will-change: transform;
-  background-color: white;
+  background-color: #f0f0f0; /* 浅灰色背景 */
   border-radius: 8px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.15);
 }
@@ -259,6 +310,12 @@ body {
   text-align: center;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   font-weight: 500;
+  cursor: move; /* 拖拽时光标变为移动图标 */
+  user-select: none; /* 禁止选中文本 */
+}
+
+.content-item:active {
+  opacity: 0.8; /* 拖拽时降低透明度 */
 }
 
 .toolbar {
