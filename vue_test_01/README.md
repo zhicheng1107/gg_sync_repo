@@ -9,6 +9,7 @@ npm install
 ```
 npm run serve
 npm run serve -- --port 9002
+npm run lint -- --fix
 ```
 
 ### Compiles and minifies for production
