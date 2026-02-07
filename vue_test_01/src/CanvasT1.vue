@@ -46,27 +46,27 @@ export default {
       startX: 0,
       startY: 0,
       containerWidth: window.innerWidth,
-      containerHeight: window.innerHeight
-    }
+      containerHeight: window.innerHeight,
+      contentWidth: 0,  // 画布实际宽度
+      contentHeight: 0  // 画布实际高度
+    };
   },
   computed: {
     canvasStyle() {
       return {
-        // transform: `translate(${this.offsetX}px, ${this.offsetY}px) scale(${this.currentZoom})`,
         transform: `scale(${this.currentZoom})`,
         transformOrigin: '50% 50%',
         transition: this.isPanning ? 'none' : 'transform 0.2s ease-out',
         cursor: this.isPanning ? 'grabbing' : 'grab'
-      }
+      };
     }
   },
   mounted() {
+    this.updateContentSize(); // 初始化画布尺寸
     this.autoCenter();
     window.addEventListener('resize', this.handleResize);
     document.addEventListener('mousemove', this.pan);
     document.addEventListener('mouseup', this.endPan);
-    
-    // 防止拖拽选中文本
     document.addEventListener('selectstart', this.preventDefault);
   },
   beforeDestroy() {
@@ -83,114 +83,109 @@ export default {
         return false;
       }
     },
-    
+
+    // 更新画布尺寸
+    updateContentSize() {
+      const containerRect = this.$refs.canvasContainer.getBoundingClientRect();
+      this.contentWidth = containerRect.width;
+      this.contentHeight = containerRect.height;
+    },
+
     // 自动居中
     autoCenter() {
       const containerRect = this.$refs.canvasContainer.getBoundingClientRect();
-      const contentWidth = 1000 * this.currentZoom; // 假设内容原始宽度为1000px
-      const contentHeight = 800 * this.currentZoom; // 假设内容原始高度为800px
-      
-      // 计算居中偏移量
+      const contentWidth = this.contentWidth * this.currentZoom;
+      const contentHeight = this.contentHeight * this.currentZoom;
+
       this.offsetX = (containerRect.width - contentWidth) / 2;
       this.offsetY = (containerRect.height - contentHeight) / 2;
-      
-      // 重置缩放
+
       this.currentZoom = 1;
     },
-    
+
     // 放大
     zoomIn() {
       const newZoom = Math.min(this.currentZoom + this.zoomStep, this.maxZoom);
       this.setZoomWithCenter(newZoom);
     },
-    
+
     // 缩小
     zoomOut() {
       const newZoom = Math.max(this.currentZoom - this.zoomStep, this.minZoom);
       this.setZoomWithCenter(newZoom);
     },
-    
+
     // 设置缩放（以画布中心为缩放中心点）
     setZoomWithCenter(zoomLevel) {
       const containerRect = this.$refs.canvasContainer.getBoundingClientRect();
       const containerWidth = containerRect.width;
       const containerHeight = containerRect.height;
-      
-      // 以画布中心为缩放中心
+
       const centerX = containerWidth / 2;
       const centerY = containerHeight / 2;
-      
-      // 计算当前中心点对应的原始内容坐标
+
       const currentCenterX = (centerX - this.offsetX) / this.currentZoom;
       const currentCenterY = (centerY - this.offsetY) / this.currentZoom;
-      
-      // 计算新缩放下中心点应处的位置
+
       this.offsetX = centerX - currentCenterX * zoomLevel;
       this.offsetY = centerY - currentCenterY * zoomLevel;
-      
+
       this.currentZoom = zoomLevel;
     },
-    
+
     // 处理鼠标滚轮缩放
     handleWheel(e) {
       e.preventDefault();
-      
+
       const containerRect = this.$refs.canvasContainer.getBoundingClientRect();
       const mouseX = e.clientX - containerRect.left;
       const mouseY = e.clientY - containerRect.top;
-      
-      // 获取当前鼠标位置相对于画布内容的原始坐标
+
       const originalMouseX = (mouseX - this.offsetX) / this.currentZoom;
       const originalMouseY = (mouseY - this.offsetY) / this.currentZoom;
-      
-      // 计算缩放变化
+
       const delta = e.deltaY > 0 ? -this.zoomStep : this.zoomStep;
-      const newZoom = Math.max(
-        this.minZoom, 
-        Math.min(this.currentZoom + delta, this.maxZoom)
-      );
-      
-      // 保持鼠标位置不变，计算新偏移量
+      const newZoom = Math.max(this.minZoom, Math.min(this.currentZoom + delta, this.maxZoom));
+
       this.offsetX = mouseX - originalMouseX * newZoom;
       this.offsetY = mouseY - originalMouseY * newZoom;
-      
+
       this.currentZoom = newZoom;
     },
-    
+
     // 开始平移
     startPan(e) {
-      if (e.button !== 0) return; // 只响应左键
+      if (e.button !== 0) return;
       this.isPanning = true;
       this.panStartX = e.clientX - this.offsetX;
       this.panStartY = e.clientY - this.offsetY;
       e.preventDefault();
     },
-    
+
     // 平移
     pan(e) {
       if (!this.isPanning) return;
-      
+
       this.offsetX = e.clientX - this.panStartX;
       this.offsetY = e.clientY - this.panStartY;
     },
-    
+
     // 结束平移
     endPan() {
       this.isPanning = false;
     },
-    
+
     // 处理窗口大小变化
     handleResize() {
       this.containerWidth = window.innerWidth;
       this.containerHeight = window.innerHeight;
-      
-      // 在窗口大小改变时重新计算居中位置
+      this.updateContentSize(); // 更新画布尺寸
       this.$nextTick(() => {
         this.autoCenter();
       });
     }
   }
-}
+};
 </script>
 
 <style scoped>
@@ -214,8 +209,8 @@ body {
   overflow: hidden;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   display: flex;
-  justify-content: center; /* 水平居中 */
-  align-items: center;     /* 垂直居中 */
+  justify-content: center;
+  align-items: center;
   cursor: grab;
 }
 
@@ -224,15 +219,14 @@ body {
 }
 
 .canvas-content-wrapper {
-  /* 不再需要额外样式 */
+  width: 100%;
+  height: 100%;
 }
 
 .canvas-content {
   position: relative;
-  width: 1000px;
-  height: 800px;
-  min-width: 1000px;
-  min-height: 800px;
+  width: 100%;
+  height: 100%;
   will-change: transform;
   background-color: white;
   border-radius: 8px;
