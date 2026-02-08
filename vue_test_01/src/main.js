@@ -16,5 +16,6 @@ Vue.use(ElementUI)
 Vue.config.productionTip = false
 
 new Vue({
+  // render: h => h(JsPlumb)
   render: h => h(CanvasT1)
 }).$mount('#app')

@@ -10,22 +10,12 @@
 
     <!-- 画布内容 -->
     <div class="canvas-content-wrapper">
-      <div 
-        class="canvas-content"
-        :style="canvasStyle"
-        @mousedown="startPan"
-        @wheel="handleWheel"
-        ref="canvasContent"
-      >
+      <div class="canvas-content" :style="canvasStyle" @mousedown="startPan" @wheel="handleWheel" ref="canvasContent">
         <!-- 示例内容 -->
         <div class="grid-background"></div>
-        <div 
-          v-for="(item, index) in contentItems" 
-          :key="index"
-          class="content-item"
+        <div v-for="(item, index) in contentItems" :key="index" :id="`item-${index}`" class="content-item"
           :style="{ top: item.top + 'px', left: item.left + 'px', background: item.background || '#2196f3' }"
-          @mousedown="startDrag($event, index)"
-        >
+          @mousedown="startDrag($event, index)">
           {{ item.text }}
         </div>
       </div>
@@ -34,6 +24,8 @@
 </template>
 
 <script>
+import { jsPlumb } from 'jsplumb';
+
 export default {
   name: 'InteractiveCanvas',
   data() {
@@ -53,16 +45,17 @@ export default {
       containerHeight: window.innerHeight,
       contentWidth: 0,
       contentHeight: 0,
-      draggingIndex: null, // 当前正在拖拽的组件索引
-      dragStartX: 0,       // 拖拽起始点X坐标
-      dragStartY: 0,       // 拖拽起始点Y坐标
+      draggingIndex: null,
+      dragStartX: 0,
+      dragStartY: 0,
       contentItems: [
         { text: '示例内容', top: 0, left: 0 },
         { text: '可移动内容', top: 200, left: 300 },
         { text: '更多元素', top: 400, left: 150, background: '#8bc34a' },
         { text: '元素4', top: 100, left: 500, background: '#ff9800' },
         { text: '元素5', top: 500, left: 400, background: '#9c27b0' }
-      ]
+      ],
+      jsPlumbInstance: null
     };
   },
   computed: {
@@ -78,6 +71,7 @@ export default {
   mounted() {
     this.updateContentSize();
     this.autoCenter();
+    this.initJsPlumb();
     window.addEventListener('resize', this.handleResize);
     document.addEventListener('mousemove', this.onMouseMove);
     document.addEventListener('mouseup', this.onMouseUp);
@@ -88,9 +82,9 @@ export default {
     document.removeEventListener('mousemove', this.onMouseMove);
     document.removeEventListener('mouseup', this.onMouseUp);
     document.removeEventListener('selectstart', this.preventDefault);
+    this.jsPlumbInstance.reset();
   },
   methods: {
-    // 阻止默认事件
     preventDefault(e) {
       if (this.isPanning || this.draggingIndex !== null) {
         e.preventDefault();
@@ -98,14 +92,12 @@ export default {
       }
     },
 
-    // 更新画布尺寸
     updateContentSize() {
       const containerRect = this.$refs.canvasContainer.getBoundingClientRect();
       this.contentWidth = containerRect.width;
       this.contentHeight = containerRect.height;
     },
 
-    // 自动居中
     autoCenter() {
       const containerRect = this.$refs.canvasContainer.getBoundingClientRect();
       const contentWidth = this.contentWidth * this.currentZoom;
@@ -117,19 +109,16 @@ export default {
       this.currentZoom = 1;
     },
 
-    // 放大
     zoomIn() {
       const newZoom = Math.min(this.currentZoom + this.zoomStep, this.maxZoom);
       this.setZoomWithCenter(newZoom);
     },
 
-    // 缩小
     zoomOut() {
       const newZoom = Math.max(this.currentZoom - this.zoomStep, this.minZoom);
       this.setZoomWithCenter(newZoom);
     },
 
-    // 设置缩放（以画布中心为缩放中心点）
     setZoomWithCenter(zoomLevel) {
       const containerRect = this.$refs.canvasContainer.getBoundingClientRect();
       const containerWidth = containerRect.width;
@@ -147,7 +136,6 @@ export default {
       this.currentZoom = zoomLevel;
     },
 
-    // 处理鼠标滚轮缩放
     handleWheel(e) {
       e.preventDefault();
 
@@ -167,7 +155,6 @@ export default {
       this.currentZoom = newZoom;
     },
 
-    // 开始平移
     startPan(e) {
       if (e.button !== 0) return;
       this.isPanning = true;
@@ -176,7 +163,6 @@ export default {
       e.preventDefault();
     },
 
-    // 平移
     pan(e) {
       if (!this.isPanning) return;
 
@@ -184,12 +170,10 @@ export default {
       this.offsetY = e.clientY - this.panStartY;
     },
 
-    // 结束平移
     endPan() {
       this.isPanning = false;
     },
 
-    // 处理窗口大小变化
     handleResize() {
       this.containerWidth = window.innerWidth;
       this.containerHeight = window.innerHeight;
@@ -199,15 +183,13 @@ export default {
       });
     },
 
-    // 开始拖拽某个组件
     startDrag(event, index) {
-      event.stopPropagation(); // 防止触发画布的拖拽
+      event.stopPropagation();
       this.draggingIndex = index;
       this.dragStartX = event.clientX;
       this.dragStartY = event.clientY;
     },
 
-    // 拖拽过程中更新组件位置
     onMouseMove(event) {
       if (this.draggingIndex === null) return;
 
@@ -218,22 +200,71 @@ export default {
       const newLeft = item.left + deltaX / this.currentZoom;
       const newTop = item.top + deltaY / this.currentZoom;
 
-      // 限制拖拽范围（防止超出画布）
       const canvasRect = this.$refs.canvasContent.getBoundingClientRect();
-      const itemWidth = 120; // 假设组件宽度为120px
-      const itemHeight = 60; // 假设组件高度为60px
+      const itemWidth = 120;
+      const itemHeight = 60;
 
       item.left = Math.max(0, Math.min(newLeft, canvasRect.width / this.currentZoom - itemWidth));
       item.top = Math.max(0, Math.min(newTop, canvasRect.height / this.currentZoom - itemHeight));
 
-      // 更新起始点
       this.dragStartX = event.clientX;
       this.dragStartY = event.clientY;
     },
 
-    // 结束拖拽
     onMouseUp() {
       this.draggingIndex = null;
+    },
+
+    initJsPlumb() {
+      this.jsPlumbInstance = jsPlumb.getInstance({
+        Container: 'canvas-content',
+        Connector: ['Bezier', { curviness: 80 }],
+        Endpoint: ['Dot', { radius: 6 }],
+        PaintStyle: { stroke: '#2196f3', strokeWidth: 2 },
+        HoverPaintStyle: { stroke: '#ff5722', strokeWidth: 3 },
+        EndpointHoverStyle: { 
+          fill: '#e91e63',
+          radius: 8
+        },
+        EndpointStyle: { 
+          fill: '#456',
+          outlineStroke: '#fff',
+          outlineWidth: 2
+        },
+        ConnectionOverlays: [
+          ['Arrow', { 
+            width: 12, 
+            length: 12, 
+            location: 1,
+            id: 'arrow',
+            foldback: 0.8
+          }],
+          ['Label', {
+            label: '',
+            location: 0.5,
+            cssClass: 'connection-label',
+            id: 'label'
+          }]
+        ],
+        DragOptions: { 
+          cursor: 'crosshair',
+          zIndex: 2000
+        },
+        Overlays: [
+          ['Arrow', { location: 1, width: 10, length: 10 }]
+        ]
+      });
+
+      this.contentItems.forEach((_, index) => {
+        const elementId = `item-${index}`;
+        this.jsPlumbInstance.addEndpoint(elementId, {
+          anchors: ['Top', 'Right', 'Bottom', 'Left'],
+          isSource: true,
+          isTarget: true
+        });
+      });
+
+      this.jsPlumbInstance.draggable(this.contentItems.map((_, index) => `item-${index}`));
     }
   }
 };
@@ -279,9 +310,9 @@ body {
   width: 100%;
   height: 100%;
   will-change: transform;
-  background-color: #f0f0f0; /* 浅灰色背景 */
+  background-color: #f0f0f0;
   border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
 }
 
 .grid-background {
@@ -290,9 +321,9 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  background-image: 
-    linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
   background-size: 50px 50px;
   z-index: 0;
   border-radius: 8px;
@@ -304,18 +335,18 @@ body {
   background: #2196f3;
   color: white;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   z-index: 1;
   min-width: 120px;
   text-align: center;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   font-weight: 500;
-  cursor: move; /* 拖拽时光标变为移动图标 */
-  user-select: none; /* 禁止选中文本 */
+  cursor: move;
+  user-select: none;
 }
 
 .content-item:active {
-  opacity: 0.8; /* 拖拽时降低透明度 */
+  opacity: 0.8;
 }
 
 .toolbar {
@@ -329,9 +360,9 @@ body {
   background: white;
   border-radius: 10px;
   padding: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .toolbar button {
@@ -343,13 +374,13 @@ body {
   font-size: 18px;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .toolbar button:hover {
   background: #e9ecef;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .zoom-display {
@@ -362,5 +393,18 @@ body {
   background: #f8f9fa;
   border-radius: 6px;
   min-width: 60px;
+}
+
+.jtk-connector {
+  z-index: 10;
+}
+
+.jtk-endpoint {
+  z-index: 11;
+  cursor: crosshair;
+}
+
+.jtk-overlay {
+  z-index: 12;
 }
 </style>
