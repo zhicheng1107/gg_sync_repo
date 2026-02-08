@@ -2,7 +2,8 @@
   <div class="canvas-container" ref="canvasContainer" @contextmenu.prevent>
     <!-- 工具栏 -->
     <div class="toolbar">
-      <button @click="autoCenter" title="自动居中">🎯</button>
+      <!-- <button @click="autoCenter" title="自动居中">🎯</button> -->
+      <button @click="centerCanvas" title="画布居中" style="font-size: 14px;">🎯</button> <!-- 新增的居中按钮 -->
       <button @click="zoomIn" title="放大">➕</button>
       <button @click="zoomOut" title="缩小">➖</button>
       <button @click="resetZoom" title="重置">↺</button>
@@ -79,8 +80,8 @@ export default {
     transformStyle() {
       return {
         transform: `translate(${this.offsetX}px, ${this.offsetY}px) scale(${this.currentZoom})`,
-        // transform: `scale(${this.currentZoom})`,
-        // transformOrigin: '50% 50%',
+        transformOrigin: '50% 50%',
+        // transformOrigin: '50 left',
         transition: this.isPanning ? 'none' : 'transform 0.1s ease-out',
         width: '100%',
         height: '100%'
@@ -91,7 +92,11 @@ export default {
   mounted() {
     this.updateCanvasSize();
     this.initJsPlumb();
-    // this.autoCenter();
+    
+    // 初始时自动居中
+    this.$nextTick(() => {
+      this.centerCanvas();
+    });
     
     window.addEventListener('resize', this.handleResize);
     document.addEventListener('mousemove', this.onMouseMove);
@@ -213,7 +218,7 @@ export default {
     
     resetZoom() {
       this.currentZoom = 1;
-      this.autoCenter();
+      this.centerCanvas(); // 重置缩放时也居中
     },
     
     zoomAtCenter(delta) {
@@ -231,7 +236,38 @@ export default {
       this.currentZoom = newZoom;
     },
     
-    // 修复：自动居中计算
+    // 新增：画布居中方法 - 将画布内容移动到视口中心
+    centerCanvas() {
+      const viewport = this.$refs.canvasViewport;
+      if (!viewport) return;
+      
+      const viewportRect = viewport.getBoundingClientRect();
+      const canvasContent = this.$refs.canvasContent;
+
+      
+      if (!canvasContent) return;
+      
+      // 计算画布内容的实际尺寸
+      const contentRect = canvasContent.getBoundingClientRect();
+      const contentWidth = contentRect.width;
+      const contentHeight = contentRect.height;
+      console.log(contentWidth, contentHeight);
+      
+      // 计算需要平移的距离，使画布内容在视口中居中
+      // 公式：偏移量 = (视口尺寸 - 内容尺寸 * 缩放) / 2
+      // this.offsetX = (viewportRect.width - contentWidth * this.currentZoom) / 2;
+      // this.offsetY = (viewportRect.height - contentHeight * this.currentZoom) / 2;
+      // this.offsetX = (viewportRect.width - contentWidth) / 2;
+      // this.offsetY = (viewportRect.height - contentHeight) / 2;
+      this.offsetX=0;this.offsetY=0;
+
+      // eslint-disable-next-line no-debugger
+      debugger
+      console.log('viewportRect:', viewportRect, contentRect, this.currentZoom);
+      console.log('offsetX:', this.offsetX, 'offsetY:', this.offsetY);
+    },
+    
+    // 原有的自动居中方法（基于内容边界框）
     autoCenter() {
       this.updateCanvasSize();
       const viewport = this.$refs.canvasViewport;
@@ -267,7 +303,7 @@ export default {
     handleResize() {
       this.updateCanvasSize();
       this.$nextTick(() => {
-        this.autoCenter();
+        this.centerCanvas();
       });
     },
     
@@ -350,6 +386,7 @@ export default {
 </script>
 
 <style scoped>
+/* 原有样式保持不变 */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -366,7 +403,6 @@ export default {
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
-/* 修复：canvas-viewport 铺满且居中 */
 .canvas-viewport {
   width: 100%;
   height: 100%;
@@ -381,7 +417,6 @@ export default {
   cursor: grabbing;
 }
 
-/* 修复：transform-layer 默认填满视口 */
 .canvas-transform-layer {
   position: relative;
   width: 100%;
@@ -389,7 +424,6 @@ export default {
   will-change: transform;
 }
 
-/* 修复：canvas-content 默认填满父容器 */
 .canvas-content {
   position: relative;
   width: 100%;
